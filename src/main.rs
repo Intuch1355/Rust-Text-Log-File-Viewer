@@ -2,6 +2,9 @@ mod data;
 mod ui;
 use std::env;
 
+// fn main() -> iced::Result {
+//     ui::run()
+// }
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = env::args().collect();
@@ -60,7 +63,10 @@ async fn main() {
                             {
                                 eprintln!("Failed to save search log to MySQL: {}", e);
                             } else {
-                                println!("Saved file record (ID: {}) and search log to MySQL.", file_id);
+                                println!(
+                                    "Saved file record (ID: {}) and search log to MySQL.",
+                                    file_id
+                                );
                             }
                         }
                         Err(e) => eprintln!("Failed to save file info to MySQL: {}", e),
