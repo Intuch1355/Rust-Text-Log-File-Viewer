@@ -1,10 +1,10 @@
-<<<<<<< HEAD
+
 mod ui;
 mod unit_test;
-=======
+
 use std::env;
 use std::fs;
->>>>>>> 484f4d4 (add log.txt)
+
 
 fn main() {
     let args: Vec<String> = env::args().collect();
