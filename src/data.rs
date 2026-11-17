@@ -1,50 +1,9 @@
+use sqlx::mysql::MySqlPoolOptions;
+use sqlx::MySqlPool;
+use std::env;
 use std::fs;
 use std::io;
-use sqlx::mysql::MySqlPoolOptions;
-use std::env;
-use tracing::{error, info};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Initialize logging (prints info, warn, and error logs to console)
-    tracing_subscriber::fmt::init();
-    dotenvy::dotenv().ok();
-
-    let database_url = env::var("DATABASE_URL")?;
-    let pool = MySqlPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
-        .await?;
-
-    // 2. Save data to MySQL
-    let username = "Alice";
-    let email = "alice@example.com";
-
-    info!("Attempting to save user: {}", username);
-
-    let result = sqlx::query("INSERT INTO users (name, email) VALUES (?, ?)")
-        .bind(username)
-        .bind(email)
-        .execute(&pool)
-        .await;
-
-    // 3. Log success or failure
-    match result {
-        Ok(res) => {
-            info!(
-                "Saved user '{}' successfully! New ID: {}, Rows affected: {}",
-                username,
-                res.last_insert_id(),
-                res.rows_affected()
-            );
-        }
-        Err(e) => {
-            error!("Failed to save user '{}': {}", username, e);
-        }
-    }
-
-    Ok(())
-}
+use std::path::Path;
 
 // read file
 pub fn read_file(path: &str) -> Result<String, io::Error> {
@@ -60,6 +19,16 @@ pub fn count_lines(content: &str) -> usize {
 // key word match
 pub fn count_matches(content: &str, keyword: &str) -> usize {
     content.matches(keyword).count()
+}
+
+// filter lines by keyword
+pub fn filter_lines<'a>(content: &'a str, keyword: &str) -> Vec<(usize, &'a str)> {
+    content
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.contains(keyword))
+        .map(|(idx, line)| (idx + 1, line))
+        .collect()
 }
 
 // file size
@@ -94,7 +63,7 @@ pub struct FileInfo {
     pub total_lines: usize,
 }
 
-// get complte file information
+// get complete file information
 pub fn get_file_info(path: &str) -> Result<FileInfo, io::Error> {
     let content = read_file(path)?;
 
@@ -112,4 +81,80 @@ pub fn get_file_info(path: &str) -> Result<FileInfo, io::Error> {
         size,
         total_lines,
     })
+}
+
+// save FileInfo to MySQL and return the new row ID
+pub async fn save_file_info(pool: &MySqlPool, info: &FileInfo) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        "INSERT INTO file_records (file_name, file_path, extension, file_size, total_lines) VALUES (?, ?, ?, ?, ?)"
+    )
+    .bind(&info.name)
+    .bind(&info.path)
+    .bind(&info.extension)
+    .bind(info.size)
+    .bind(info.total_lines as u64)
+    .execute(pool)
+    .await?;
+
+    Ok(result.last_insert_id())
+}
+
+// save search log to MySQL
+pub async fn save_search_log(
+    pool: &MySqlPool,
+    file_id: u64,
+    keyword: &str,
+    match_count: usize,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("INSERT INTO search_logs (file_id, keyword, match_count) VALUES (?, ?, ?)")
+        .bind(file_id)
+        .bind(keyword)
+        .bind(match_count as u64)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenvy::dotenv().ok();
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+
+    let pool = MySqlPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await?;
+
+    let file_path = "log.txt";
+    let keyword = "ERROR";
+
+    // 1. Read file and gather FileInfo using your functions
+    let content = read_file(file_path)?;
+    let info = get_file_info(file_path)?;
+    println!("File Info: {:?}", info);
+
+    // 2. Show all lines
+    println!("\n--- ALL LINES ({}) ---", info.total_lines);
+    for (idx, line) in content.lines().enumerate() {
+        println!("{}: {}", idx + 1, line);
+    }
+
+    // 3. Filter by keyword and count matches
+    let matched_lines = filter_lines(&content, keyword);
+    let total_matches = count_matches(&content, keyword);
+
+    println!("\n--- FILTERED LINES (Keyword: '{}') ---", keyword);
+    for (line_num, line) in &matched_lines {
+        println!("Line {}: {}", line_num, line);
+    }
+    println!("Total keyword matches: {}", total_matches);
+
+    // 4. Save file data and search log to MySQL
+    let file_id = save_file_info(&pool, &info).await?;
+    save_search_log(&pool, file_id, keyword, total_matches).await?;
+
+    println!("\nSaved file info (ID: {}) and search log to MySQL!", file_id);
+
+    Ok(())
 }
