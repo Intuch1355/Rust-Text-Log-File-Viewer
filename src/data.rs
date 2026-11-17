@@ -1,5 +1,5 @@
-use sqlx::mysql::MySqlPoolOptions;
 use sqlx::MySqlPool;
+use sqlx::mysql::MySqlPoolOptions;
 use std::env;
 use std::fs;
 use std::io;
