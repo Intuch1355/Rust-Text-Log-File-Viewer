@@ -61,3 +61,55 @@ pub fn count_lines(content: &str) -> usize {
 pub fn count_matches(content: &str, keyword: &str) -> usize {
     content.matches(keyword).count()
 }
+
+// file size
+pub fn get_file_size(path: &str) -> Result<u64, io::Error> {
+    let metadata = fs::metadata(path)?;
+    Ok(metadata.len())
+}
+
+// file name
+pub fn get_file_name(path: &str) -> Option<String> {
+    Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(String::from)
+}
+
+// file extension
+pub fn get_file_extension(path: &str) -> Option<String> {
+    Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(String::from)
+}
+
+// file information struct
+#[derive(Debug, Clone)]
+pub struct FileInfo {
+    pub name: String,
+    pub path: String,
+    pub extension: Option<String>,
+    pub size: u64,
+    pub total_lines: usize,
+}
+
+// get complte file information
+pub fn get_file_info(path: &str) -> Result<FileInfo, io::Error> {
+    let content = read_file(path)?;
+
+    let name = get_file_name(path)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid file name"))?;
+
+    let extension = get_file_extension(path);
+    let size = get_file_size(path)?;
+    let total_lines = count_lines(&content);
+
+    Ok(FileInfo {
+        name,
+        path: path.to_string(),
+        extension,
+        size,
+        total_lines,
+    })
+}
