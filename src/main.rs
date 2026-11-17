@@ -1,28 +1,23 @@
-
+mod data;
 mod ui;
 
 use std::env;
-use std::fs;
-
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let filename = &args[1];
+    let path = &args[1];
     let keyword = &args[2];
 
-    // read file
-    let content = match fs::read_to_string(filename) {
-        Ok(content) => content,
-        Err(error) => {
-            println!("error: {}", error);
-            return;
+    match data::read_file(path) {
+        Ok(content) => {
+            let lines = data::count_lines(&content);
+            let matches = data::count_matches(&content, keyword);
+            println!("Total lines: {}", lines);
+            println!("Matches: {}", matches);
         }
-    };
-
-    // keyword
-    let count = content.matches(keyword).count();
-    println!("{}", count)
+        Err(error) => println!("error: {}", error),
+    }
 }
 #[cfg(test)]
 mod unit_test;
