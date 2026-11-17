@@ -5,6 +5,17 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+// connect to MySQL using DATABASE_URL from .env
+pub async fn connect_db() -> Result<MySqlPool, sqlx::Error> {
+    dotenvy::dotenv().ok();
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+
+    MySqlPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+}
+
 // read file
 pub fn read_file(path: &str) -> Result<String, io::Error> {
     let content = fs::read_to_string(path)?;
@@ -112,49 +123,6 @@ pub async fn save_search_log(
         .bind(match_count as u64)
         .execute(pool)
         .await?;
-
-    Ok(())
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenvy::dotenv().ok();
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-
-    let pool = MySqlPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
-        .await?;
-
-    let file_path = "app.log";
-    let keyword = "ERROR";
-
-    // 1. Read file and gather FileInfo using your functions
-    let content = read_file(file_path)?;
-    let info = get_file_info(file_path)?;
-    println!("File Info: {:?}", info);
-
-    // 2. Show all lines
-    println!("\n--- ALL LINES ({}) ---", info.total_lines);
-    for (idx, line) in content.lines().enumerate() {
-        println!("{}: {}", idx + 1, line);
-    }
-
-    // 3. Filter by keyword and count matches
-    let matched_lines = filter_lines(&content, keyword);
-    let total_matches = count_matches(&content, keyword);
-
-    println!("\n--- FILTERED LINES (Keyword: '{}') ---", keyword);
-    for (line_num, line) in &matched_lines {
-        println!("Line {}: {}", line_num, line);
-    }
-    println!("Total keyword matches: {}", total_matches);
-
-    // 4. Save file data and search log to MySQL
-    let file_id = save_file_info(&pool, &info).await?;
-    save_search_log(&pool, file_id, keyword, total_matches).await?;
-
-    println!("\nSaved file info (ID: {}) and search log to MySQL!", file_id);
 
     Ok(())
 }
