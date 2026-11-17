@@ -1,28 +1,49 @@
-
-mod ui;
 mod data;
+mod ui;
 use std::env;
 use std::fs;
+
 
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let filename = &args[1];
+    if args.len() < 3 {
+        println!("usage: cargo run -- <file_path> <keyword>");
+        return;
+    }
+
+    let path = &args[1];
     let keyword = &args[2];
 
-    // read file
-    let content = match fs::read_to_string(filename) {
-        Ok(content) => content,
-        Err(error) => {
-            println!("error: {}", error);
-            return;
-        }
-    };
+    match data::read_file(path) {
+        Ok(content) => {
+            let lines = data::count_lines(&content);
+            let matches = data::count_matches(&content, keyword);
+            let size = data::get_file_size(path);
 
-    // keyword
-    let count = content.matches(keyword).count();
-    println!("{}", count)
+            println!("========== LOG VIEWER ==========");
+            println!("File: {}", path);
+
+            match extension {
+                Some(ext) => println!("Extension: .{}", ext),
+                None => println!("Extension: No extension"),
+            }
+
+            println!("Keyword: {}", keyword);
+            println!("Total lines: {}", lines);
+            println!("Matches: {}", matches);
+
+            match size {
+                Ok(size) => println!("File size: {} bytes", size),
+                Err(error) => println!("File size error: {}", error),
+            }
+
+            println!("================================");
+        }
+
+        Err(error) => println!("Error: {}", error),
+    }
 }
 #[cfg(test)]
 mod unit_test;

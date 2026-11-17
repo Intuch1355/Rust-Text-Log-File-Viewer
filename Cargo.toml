@@ -4,4 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-sqlx = "0.9.0"
+<<<<<<< Updated upstream
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "mysql"] }
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+=======
+iced = "0.12"
+qlx = "0.9.0"
+>>>>>>> Stashed changes
