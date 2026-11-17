@@ -5,7 +5,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-// connect to MySQL using DATABASE_URL from .env
+// connect to mysql using DATABASE_URL from .env
 pub async fn connect_db() -> Result<MySqlPool, sqlx::Error> {
     dotenvy::dotenv().ok();
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -94,7 +94,7 @@ pub fn get_file_info(path: &str) -> Result<FileInfo, io::Error> {
     })
 }
 
-// save FileInfo to MySQL and return the new row ID
+// save FileInfo to mysql and return the new row ID
 pub async fn save_file_info(pool: &MySqlPool, info: &FileInfo) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         "INSERT INTO file_records (file_name, file_path, extension, file_size, total_lines) VALUES (?, ?, ?, ?, ?)"
@@ -110,7 +110,7 @@ pub async fn save_file_info(pool: &MySqlPool, info: &FileInfo) -> Result<u64, sq
     Ok(result.last_insert_id())
 }
 
-// save search log to MySQL
+// save search log to mysql
 pub async fn save_search_log(
     pool: &MySqlPool,
     file_id: u64,

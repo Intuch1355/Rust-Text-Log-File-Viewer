@@ -50,7 +50,7 @@ async fn main() {
             }
             println!("================================");
 
-            // Save file info and search log to MySQL
+            // Save file info and search log to mysql
             if let Ok(info) = data::get_file_info(path) {
                 match data::connect_db().await {
                     Ok(pool) => match data::save_file_info(&pool, &info).await {
