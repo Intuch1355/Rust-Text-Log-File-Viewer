@@ -1,6 +1,5 @@
 
 mod ui;
-mod unit_test;
 
 use std::env;
 use std::fs;
@@ -25,3 +24,5 @@ fn main() {
     let count = content.matches(keyword).count();
     println!("{}", count)
 }
+#[cfg(test)]
+mod unit_test;
