@@ -3,8 +3,6 @@ mod ui;
 use std::env;
 use std::fs;
 
-
-
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -21,6 +19,7 @@ fn main() {
             let lines = data::count_lines(&content);
             let matches = data::count_matches(&content, keyword);
             let size = data::get_file_size(path);
+            let extension = data::get_file_extension(path);
 
             println!("========== LOG VIEWER ==========");
             println!("File: {}", path);
