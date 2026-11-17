@@ -1,5 +1,5 @@
 use super::*;
-
+use std::fs;
 #[test]
 fn read_file(){
     assert!(data::read_file("test.txt").is_ok())
@@ -18,7 +18,7 @@ fn get_file_info(){
     if let Ok(info)=data::get_file_info("test.txt"){
         assert_eq!(info.name, String::from("test.txt"));
         assert_eq!(info.path, String::from("test.txt"));
-        assert_eq!(info.extension, Some(String::from(".txt")));
+        assert_eq!(info.extension, Some(String::from("txt")));
         assert_eq!(info.size, 367);
         assert_eq!(info.total_lines,42);
     }
