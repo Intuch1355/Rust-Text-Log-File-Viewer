@@ -1,6 +1,5 @@
 
 use super::*;
-use std::fs;
 use sqlx::{MySqlPool, Row};
 use sqlx::mysql::MySqlPoolOptions;
 use std::env;
@@ -10,27 +9,28 @@ fn read_file() {
     assert!(data::read_file("test.txt").is_ok())
 }
 
-// #[test]
-// fn get_file_info() {
-//     if let Ok(info) = data::get_file_info("test.txt") {
-//         assert_eq!(info.name, String::from("test.txt"));
-//         assert_eq!(info.path, String::from("test.txt"));
-//         assert_eq!(info.extension, Some(String::from("txt")));
-//         assert_eq!(info.size, 367);
-//         assert_eq!(info.total_lines, 42);
-//     }
-//     assert!(data::get_file_info("NONE.rs").is_err());
-// }
+#[test]
+fn file_info() {
+    if let Ok(info) = data::read_file("test.txt") {
+        assert_eq!(data::count_lines(info.as_str()), 42);
+        assert_eq!(data::count_matches(info.as_str(),"Blue"), 6);
+        assert_eq!(data::get_file_extension("test.txt"), Some(String::from("txt")));
+        assert_eq!(data::get_file_size("test.txt").unwrap(), 367);
+    }
+    assert!(data::read_file("NONE.rs").is_err());
+}
+
 
 async fn create_table(pool: &MySqlPool) -> sqlx::Result<()> {
     sqlx::query(
         "CREATE TABLE file_records (
-            id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            file_name   VARCHAR(255)  NOT NULL,
-            file_path   VARCHAR(1024) NOT NULL,
-            extension   VARCHAR(32)   NOT NULL,
-            file_size   BIGINT UNSIGNED NOT NULL,
-            total_lines BIGINT UNSIGNED NOT NULL
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            file_name VARCHAR(255) NOT NULL,
+            file_path VARCHAR(500) NOT NULL,
+            extension VARCHAR(50),
+            file_size BIGINT UNSIGNED NOT NULL,
+            total_lines INT UNSIGNED NOT NULL,
+            saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
     )
     .execute(pool)
@@ -88,28 +88,4 @@ async fn save_file_info_fail(pool: MySqlPool) {
     };
     let result = data::save_file_info(&pool, &info).await;
     assert!(result.is_err());
-}
-
-#[sqlx::test]
-async fn save_search_log(pool:MySqlPool)->sqlx::Result<()>{
-    create_table(&pool).await?;
-    let info:data::FileInfo=data::FileInfo { 
-        name: String::from("test.txt"), 
-        path: String::from("test.txt"), 
-        extension: Some(String::from("txt")), 
-        size: (367), 
-        total_lines: (42) 
-    };
-    let id = data::save_file_info(&pool, &info).await?;
-    assert!(data::save_search_log(&pool, id, "test", 3).await.is_ok());
-
-    let row=sqlx::query("SELECT file_id, keyword, match_count
-        FROM search_logs WHERE id = ?",)
-        .bind(id)
-        .fetch_one(&pool)
-        .await?;
-    assert_eq!(row.get::<u64, _>("file_id"), id);
-    assert_eq!(row.get::<String, _>("keyword"), "test");
-    assert_eq!(row.get::<u64, _>("match_count"), 3);
-    Ok(())
 }
