@@ -78,7 +78,7 @@ pub enum Message {
     DbConnected(Result<MySqlPool, String>),
     DbSaved,
     ActivityLoaded(Result<Vec<ActivityRecord>, String>),
-    DbError(String),
+    DbError(()),
 }
 
 // Application State
@@ -144,25 +144,29 @@ impl Application for App {
             Message::DbConnected(result) => match result {
                 Ok(pool) => {
                     self.db_pool = Some(pool.clone());
-                    self.notice_message = Some(String::from("MySQL connected."));
                     self.error_message = None;
                     return Command::perform(
                         async move {
                             data::load_activity(&pool)
                                 .await
-                                .map(|rows| rows.into_iter().map(|row| ActivityRecord {
-                                    file_name: row.file_name,
-                                    keyword: row.keyword,
-                                    match_count: row.match_count,
-                                    searched_at: row.searched_at,
-                                }).collect())
+                                .map(|rows| {
+                                    rows.into_iter()
+                                        .map(|row| ActivityRecord {
+                                            file_name: row.file_name,
+                                            keyword: row.keyword,
+                                            match_count: row.match_count,
+                                            searched_at: row.searched_at,
+                                        })
+                                        .collect()
+                                })
                                 .map_err(|error| format!("Could not load activity: {}", error))
                         },
                         Message::ActivityLoaded,
                     );
                 }
-                Err(error) => {
-                    self.error_message = Some(error);
+                Err(_) => {
+                    // MySQL is optional — a missing server must not bother
+                    // local-only users, so the failure is silently ignored.
                 }
             },
 
@@ -175,12 +179,16 @@ impl Application for App {
                         async move {
                             data::load_activity(&pool)
                                 .await
-                                .map(|rows| rows.into_iter().map(|row| ActivityRecord {
-                                    file_name: row.file_name,
-                                    keyword: row.keyword,
-                                    match_count: row.match_count,
-                                    searched_at: row.searched_at,
-                                }).collect())
+                                .map(|rows| {
+                                    rows.into_iter()
+                                        .map(|row| ActivityRecord {
+                                            file_name: row.file_name,
+                                            keyword: row.keyword,
+                                            match_count: row.match_count,
+                                            searched_at: row.searched_at,
+                                        })
+                                        .collect()
+                                })
                                 .map_err(|error| format!("Could not refresh activity: {}", error))
                         },
                         Message::ActivityLoaded,
@@ -190,11 +198,15 @@ impl Application for App {
 
             Message::ActivityLoaded(result) => match result {
                 Ok(records) => self.activity = records,
-                Err(error) => self.error_message = Some(error),
+                Err(_) => {
+                    // MySQL is optional — a failed activity load must not
+                    // bother local-only users, so the error is silently ignored.
+                }
             },
 
-            Message::DbError(error) => {
-                self.error_message = Some(error);
+            Message::DbError(_) => {
+                // MySQL is optional — a failed save must not bother
+                // local-only users, so the error is silently ignored.
             }
 
             // input
@@ -291,10 +303,7 @@ impl Application for App {
                                     match data::save_file_info(&pool, &info).await {
                                         Ok(file_id) => {
                                             match data::save_search_log(
-                                                &pool,
-                                                file_id,
-                                                &keyword,
-                                                matches,
+                                                &pool, file_id, &keyword, matches,
                                             )
                                             .await
                                             {
@@ -305,15 +314,14 @@ impl Application for App {
                                                 )),
                                             }
                                         }
-                                        Err(error) => Err(format!(
-                                            "MySQL file info error: {}",
-                                            error
-                                        )),
+                                        Err(error) => {
+                                            Err(format!("MySQL file info error: {}", error))
+                                        }
                                     }
                                 },
                                 |res| match res {
                                     Ok(()) => Message::DbSaved,
-                                    Err(error) => Message::DbError(error),
+                                    Err(_) => Message::DbError(()),
                                 },
                             );
                         }
@@ -513,12 +521,7 @@ impl App {
 
         let save_button = button("Save report").on_press(Message::AskSave);
 
-        let db_status = match &self.db_pool {
-            Some(_) => text("MySQL: connected").size(14),
-            None => text("MySQL: not connected").size(14),
-        };
-
-        let mut content = column![metadata, save_button, db_status,].spacing(20);
+        let mut content = column![metadata, save_button,].spacing(20);
 
         if self.confirm_save {
             let confirmation = container(
@@ -608,7 +611,11 @@ impl App {
             controls,
             status,
             scrollable(records).height(Length::Fill),
-            text("Activity history is loaded from MySQL and persists after restarting the app."),
+            if self.db_pool.is_some() {
+                text("Activity history is saved to MySQL")
+            } else {
+                text("Activity history needed MySQL to work.")
+            }
         ]
         .spacing(15)
         .into()
