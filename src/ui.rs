@@ -7,6 +7,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::data;
+use sqlx::MySqlPool;
 
 // Screen
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -29,15 +30,16 @@ struct FileInfo {
 
 // ActivityRecord
 #[derive(Debug, Clone)]
-struct ActivityRecord {
+pub struct ActivityRecord {
     file_name: String,
     keyword: String,
     match_count: usize,
+    searched_at: String,
 }
 
 // LoadedFile
 #[derive(Debug, Clone)]
-struct LoadedFile {
+pub(crate) struct LoadedFile {
     content: String,
     info: FileInfo,
 }
@@ -71,11 +73,20 @@ pub enum Message {
     ActivitySearchChanged(String),
     SortByName,
     SortByKeyword,
+
+    // MySQL
+    DbConnected(Result<MySqlPool, String>),
+    DbSaved,
+    ActivityLoaded(Result<Vec<ActivityRecord>, String>),
+    DbError(String),
 }
 
 // Application State
 #[derive(Default)]
 pub struct App {
+    // MySQL
+    db_pool: Option<MySqlPool>,
+
     // Input
     file_path: String,
     keyword: String,
@@ -110,7 +121,17 @@ impl Application for App {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
-        (Self::default(), Command::none())
+        (
+            Self::default(),
+            Command::perform(
+                async move {
+                    data::connect_db()
+                        .await
+                        .map_err(|error| format!("MySQL connection failed: {}", error))
+                },
+                Message::DbConnected,
+            ),
+        )
     }
 
     fn title(&self) -> String {
@@ -119,6 +140,63 @@ impl Application for App {
 
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
+            // mysql
+            Message::DbConnected(result) => match result {
+                Ok(pool) => {
+                    self.db_pool = Some(pool.clone());
+                    self.notice_message = Some(String::from("MySQL connected."));
+                    self.error_message = None;
+                    return Command::perform(
+                        async move {
+                            data::load_activity(&pool)
+                                .await
+                                .map(|rows| rows.into_iter().map(|row| ActivityRecord {
+                                    file_name: row.file_name,
+                                    keyword: row.keyword,
+                                    match_count: row.match_count,
+                                    searched_at: row.searched_at,
+                                }).collect())
+                                .map_err(|error| format!("Could not load activity: {}", error))
+                        },
+                        Message::ActivityLoaded,
+                    );
+                }
+                Err(error) => {
+                    self.error_message = Some(error);
+                }
+            },
+
+            Message::DbSaved => {
+                self.notice_message = Some(String::from("Saved to MySQL."));
+                self.error_message = None;
+                if let Some(pool) = &self.db_pool {
+                    let pool = pool.clone();
+                    return Command::perform(
+                        async move {
+                            data::load_activity(&pool)
+                                .await
+                                .map(|rows| rows.into_iter().map(|row| ActivityRecord {
+                                    file_name: row.file_name,
+                                    keyword: row.keyword,
+                                    match_count: row.match_count,
+                                    searched_at: row.searched_at,
+                                }).collect())
+                                .map_err(|error| format!("Could not refresh activity: {}", error))
+                        },
+                        Message::ActivityLoaded,
+                    );
+                }
+            }
+
+            Message::ActivityLoaded(result) => match result {
+                Ok(records) => self.activity = records,
+                Err(error) => self.error_message = Some(error),
+            },
+
+            Message::DbError(error) => {
+                self.error_message = Some(error);
+            }
+
             // input
             Message::FilePathChanged(path) => {
                 self.file_path = path;
@@ -193,17 +271,52 @@ impl Application for App {
                         self.match_count = matches;
                         self.filtered_lines = lines;
 
-                        self.activity.insert(
-                            0,
-                            ActivityRecord {
-                                file_name: file.info.name.clone(),
-                                keyword: keyword.clone(),
-                                match_count: matches,
-                            },
-                        );
-
-                        self.file_info = Some(file.info);
+                        self.file_info = Some(file.info.clone());
                         self.error_message = None;
+
+                        // Save to MySQL
+                        if let Some(pool) = &self.db_pool {
+                            let pool = pool.clone();
+                            let info = data::FileInfo {
+                                name: file.info.name,
+                                path: file.info.path,
+                                extension: file.info.extension,
+                                size: file.info.size,
+                                total_lines: file.info.total_lines,
+                            };
+                            let keyword = keyword.clone();
+
+                            return Command::perform(
+                                async move {
+                                    match data::save_file_info(&pool, &info).await {
+                                        Ok(file_id) => {
+                                            match data::save_search_log(
+                                                &pool,
+                                                file_id,
+                                                &keyword,
+                                                matches,
+                                            )
+                                            .await
+                                            {
+                                                Ok(()) => Ok(()),
+                                                Err(error) => Err(format!(
+                                                    "MySQL search log error: {}",
+                                                    error
+                                                )),
+                                            }
+                                        }
+                                        Err(error) => Err(format!(
+                                            "MySQL file info error: {}",
+                                            error
+                                        )),
+                                    }
+                                },
+                                |res| match res {
+                                    Ok(()) => Message::DbSaved,
+                                    Err(error) => Message::DbError(error),
+                                },
+                            );
+                        }
                     }
 
                     Err(error) => {
@@ -400,7 +513,12 @@ impl App {
 
         let save_button = button("Save report").on_press(Message::AskSave);
 
-        let mut content = column![metadata, save_button,].spacing(20);
+        let db_status = match &self.db_pool {
+            Some(_) => text("MySQL: connected").size(14),
+            None => text("MySQL: not connected").size(14),
+        };
+
+        let mut content = column![metadata, save_button, db_status,].spacing(20);
 
         if self.confirm_save {
             let confirmation = container(
@@ -449,6 +567,7 @@ impl App {
             text("File name").width(Length::FillPortion(3)),
             text("Keyword").width(Length::FillPortion(2)),
             text("Matches").width(Length::FillPortion(1)),
+            text("Searched at").width(Length::FillPortion(2)),
         ];
 
         let search = self.activity_search.to_lowercase();
@@ -469,6 +588,7 @@ impl App {
                         text(&record.file_name).width(Length::FillPortion(3)),
                         text(&record.keyword).width(Length::FillPortion(2)),
                         text(record.match_count.to_string()).width(Length::FillPortion(1)),
+                        text(&record.searched_at).width(Length::FillPortion(2)),
                     ]
                     .spacing(10),
                 );
@@ -488,9 +608,7 @@ impl App {
             controls,
             status,
             scrollable(records).height(Length::Fill),
-            text(
-                "Note: Activity is currently stored in memory. MySQL integration is still needed."
-            ),
+            text("Activity history is loaded from MySQL and persists after restarting the app."),
         ]
         .spacing(15)
         .into()
