@@ -6,7 +6,8 @@ use std::env;
 
 #[test]
 fn read_file() {
-    assert!(data::read_file("test.txt").is_ok())
+    assert!(data::read_file("test.txt").is_ok());
+    assert!(data::read_file("NONE.txt").is_err());
 }
 
 #[test]
