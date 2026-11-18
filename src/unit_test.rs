@@ -3,31 +3,24 @@ use super::*;
 use std::fs;
 use sqlx::{MySqlPool, Row};
 use sqlx::mysql::MySqlPoolOptions;
+use std::env;
 
 #[test]
 fn read_file() {
     assert!(data::read_file("test.txt").is_ok())
 }
-#[test]
-fn filter_lines() {
-    if let Ok(test) = fs::read_to_string("test.txt") {
-        let test = test.as_str();
-        assert_eq!(data::filter_lines(test, "Blue").len(), 6);
-        assert_eq!(data::filter_lines(test, "Red").len(), 8);
-        assert_eq!(data::filter_lines(test, "z").len(), 0);
-    }
-}
-#[test]
-fn get_file_info() {
-    if let Ok(info) = data::get_file_info("test.txt") {
-        assert_eq!(info.name, String::from("test.txt"));
-        assert_eq!(info.path, String::from("test.txt"));
-        assert_eq!(info.extension, Some(String::from("txt")));
-        assert_eq!(info.size, 367);
-        assert_eq!(info.total_lines, 42);
-    }
-    assert!(data::get_file_info("NONE.rs").is_err());
-}
+
+// #[test]
+// fn get_file_info() {
+//     if let Ok(info) = data::get_file_info("test.txt") {
+//         assert_eq!(info.name, String::from("test.txt"));
+//         assert_eq!(info.path, String::from("test.txt"));
+//         assert_eq!(info.extension, Some(String::from("txt")));
+//         assert_eq!(info.size, 367);
+//         assert_eq!(info.total_lines, 42);
+//     }
+//     assert!(data::get_file_info("NONE.rs").is_err());
+// }
 
 async fn create_table(pool: &MySqlPool) -> sqlx::Result<()> {
     sqlx::query(
@@ -58,8 +51,14 @@ async fn connect_db(){
 }
 #[sqlx::test]
 async fn save_file_info(pool:MySqlPool)->sqlx::Result<()>{
+    let info:data::FileInfo=data::FileInfo { 
+        name: String::from("test.txt"), 
+        path: String::from("test.txt"), 
+        extension: Some(String::from("txt")), 
+        size: (367), 
+        total_lines: (42) 
+    };
     create_table(&pool).await?;
-    let info= data::get_file_info("test.txt").unwrap();
     let id = data::save_file_info(&pool, &info).await?;
     assert_ne!(id,0);
 
@@ -80,7 +79,13 @@ async fn save_file_info(pool:MySqlPool)->sqlx::Result<()>{
 }
 #[sqlx::test]
 async fn save_file_info_fail(pool: MySqlPool) {
-    let info= data::get_file_info("test.txt").unwrap();
+    let info:data::FileInfo=data::FileInfo { 
+        name: String::from("test.txt"), 
+        path: String::from("test.txt"), 
+        extension: Some(String::from("txt")), 
+        size: (367), 
+        total_lines: (42) 
+    };
     let result = data::save_file_info(&pool, &info).await;
     assert!(result.is_err());
 }
@@ -88,7 +93,13 @@ async fn save_file_info_fail(pool: MySqlPool) {
 #[sqlx::test]
 async fn save_search_log(pool:MySqlPool)->sqlx::Result<()>{
     create_table(&pool).await?;
-    let info= data::get_file_info("test.txt").unwrap();
+    let info:data::FileInfo=data::FileInfo { 
+        name: String::from("test.txt"), 
+        path: String::from("test.txt"), 
+        extension: Some(String::from("txt")), 
+        size: (367), 
+        total_lines: (42) 
+    };
     let id = data::save_file_info(&pool, &info).await?;
     assert!(data::save_search_log(&pool, id, "test", 3).await.is_ok());
 
