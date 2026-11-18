@@ -30,7 +30,7 @@ struct FileInfo {
 
 // ActivityRecord
 #[derive(Debug, Clone)]
-struct ActivityRecord {
+pub struct ActivityRecord {
     file_name: String,
     keyword: String,
     match_count: usize,
