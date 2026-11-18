@@ -108,10 +108,10 @@ pub async fn load_activity(pool: &MySqlPool) -> Result<Vec<ActivityEntry>, sqlx:
 
     let rows = sqlx::query(
         "SELECT f.file_name, s.keyword, s.match_count, \
-         CAST(s.created_at AS CHAR) AS searched_at \
+         CAST(s.searched_at AS CHAR) AS searched_at \
          FROM search_logs s \
          INNER JOIN file_records f ON f.id = s.file_id \
-         ORDER BY s.created_at DESC, s.id DESC"
+         ORDER BY s.searched_at DESC, s.id DESC"
     )
     .fetch_all(pool)
     .await?;
