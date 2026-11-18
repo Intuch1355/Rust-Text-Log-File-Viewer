@@ -6,14 +6,17 @@ use std::io;
 use std::path::Path;
 
 // connect to mysql using DATABASE_URL from .env
-pub async fn connect_db() -> Result<MySqlPool, sqlx::Error> {
-    dotenvy::dotenv().ok();
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+pub async fn connect_db() -> Result<MySqlPool, String> {
+    // Keep an already-exported DATABASE_URL usable even if .env is absent.
+    let _ = dotenvy::dotenv();
+    let database_url = env::var("DATABASE_URL")
+        .map_err(|error| format!("DATABASE_URL is missing or invalid: {}", error))?;
 
     MySqlPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
         .await
+        .map_err(|error| format!("MySQL connection failed: {}", error))
 }
 
 // read file
@@ -32,28 +35,10 @@ pub fn count_matches(content: &str, keyword: &str) -> usize {
     content.matches(keyword).count()
 }
 
-// filter lines by keyword
-pub fn filter_lines<'a>(content: &'a str, keyword: &str) -> Vec<(usize, &'a str)> {
-    content
-        .lines()
-        .enumerate()
-        .filter(|(_, line)| line.contains(keyword))
-        .map(|(idx, line)| (idx + 1, line))
-        .collect()
-}
-
 // file size
 pub fn get_file_size(path: &str) -> Result<u64, io::Error> {
     let metadata = fs::metadata(path)?;
     Ok(metadata.len())
-}
-
-// file name
-pub fn get_file_name(path: &str) -> Option<String> {
-    Path::new(path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(String::from)
 }
 
 // file extension
@@ -72,26 +57,6 @@ pub struct FileInfo {
     pub extension: Option<String>,
     pub size: u64,
     pub total_lines: usize,
-}
-
-// get complete file information
-pub fn get_file_info(path: &str) -> Result<FileInfo, io::Error> {
-    let content = read_file(path)?;
-
-    let name = get_file_name(path)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid file name"))?;
-
-    let extension = get_file_extension(path);
-    let size = get_file_size(path)?;
-    let total_lines = count_lines(&content);
-
-    Ok(FileInfo {
-        name,
-        path: path.to_string(),
-        extension,
-        size,
-        total_lines,
-    })
 }
 
 // save FileInfo to mysql and return the new row ID
@@ -125,4 +90,40 @@ pub async fn save_search_log(
         .await?;
 
     Ok(())
+}
+
+
+// One activity row returned from MySQL.
+#[derive(Debug, Clone)]
+pub struct ActivityEntry {
+    pub file_name: String,
+    pub keyword: String,
+    pub match_count: usize,
+    pub searched_at: String,
+}
+
+// Load persisted activity for the GUI.
+pub async fn load_activity(pool: &MySqlPool) -> Result<Vec<ActivityEntry>, sqlx::Error> {
+    use sqlx::Row;
+
+    let rows = sqlx::query(
+        "SELECT f.file_name, s.keyword, s.match_count, \
+         CAST(s.searched_at AS CHAR) AS searched_at \
+         FROM search_logs s \
+         INNER JOIN file_records f ON f.id = s.file_id \
+         ORDER BY s.searched_at DESC, s.id DESC"
+    )
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(ActivityEntry {
+                file_name: row.try_get("file_name")?,
+                keyword: row.try_get("keyword")?,
+                match_count: row.try_get::<u64, _>("match_count")? as usize,
+                searched_at: row.try_get("searched_at")?,
+            })
+        })
+        .collect()
 }

@@ -34,6 +34,7 @@ struct ActivityRecord {
     file_name: String,
     keyword: String,
     match_count: usize,
+    searched_at: String,
 }
 
 // LoadedFile
@@ -75,6 +76,8 @@ pub enum Message {
 
     // MySQL
     DbConnected(Result<MySqlPool, String>),
+    DbSaved,
+    ActivityLoaded(Result<Vec<ActivityRecord>, String>),
     DbError(String),
 }
 
@@ -140,13 +143,54 @@ impl Application for App {
             // mysql
             Message::DbConnected(result) => match result {
                 Ok(pool) => {
-                    self.db_pool = Some(pool);
+                    self.db_pool = Some(pool.clone());
                     self.notice_message = Some(String::from("MySQL connected."));
                     self.error_message = None;
+                    return Command::perform(
+                        async move {
+                            data::load_activity(&pool)
+                                .await
+                                .map(|rows| rows.into_iter().map(|row| ActivityRecord {
+                                    file_name: row.file_name,
+                                    keyword: row.keyword,
+                                    match_count: row.match_count,
+                                    searched_at: row.searched_at,
+                                }).collect())
+                                .map_err(|error| format!("Could not load activity: {}", error))
+                        },
+                        Message::ActivityLoaded,
+                    );
                 }
                 Err(error) => {
                     self.error_message = Some(error);
                 }
+            },
+
+            Message::DbSaved => {
+                self.notice_message = Some(String::from("Saved to MySQL."));
+                self.error_message = None;
+                if let Some(pool) = &self.db_pool {
+                    let pool = pool.clone();
+                    return Command::perform(
+                        async move {
+                            data::load_activity(&pool)
+                                .await
+                                .map(|rows| rows.into_iter().map(|row| ActivityRecord {
+                                    file_name: row.file_name,
+                                    keyword: row.keyword,
+                                    match_count: row.match_count,
+                                    searched_at: row.searched_at,
+                                }).collect())
+                                .map_err(|error| format!("Could not refresh activity: {}", error))
+                        },
+                        Message::ActivityLoaded,
+                    );
+                }
+            }
+
+            Message::ActivityLoaded(result) => match result {
+                Ok(records) => self.activity = records,
+                Err(error) => self.error_message = Some(error),
             },
 
             Message::DbError(error) => {
@@ -227,15 +271,6 @@ impl Application for App {
                         self.match_count = matches;
                         self.filtered_lines = lines;
 
-                        self.activity.insert(
-                            0,
-                            ActivityRecord {
-                                file_name: file.info.name.clone(),
-                                keyword: keyword.clone(),
-                                match_count: matches,
-                            },
-                        );
-
                         self.file_info = Some(file.info.clone());
                         self.error_message = None;
 
@@ -277,9 +312,7 @@ impl Application for App {
                                     }
                                 },
                                 |res| match res {
-                                    Ok(()) => Message::DbError(String::from(
-                                        "Saved to MySQL.",
-                                    )),
+                                    Ok(()) => Message::DbSaved,
                                     Err(error) => Message::DbError(error),
                                 },
                             );
@@ -534,6 +567,7 @@ impl App {
             text("File name").width(Length::FillPortion(3)),
             text("Keyword").width(Length::FillPortion(2)),
             text("Matches").width(Length::FillPortion(1)),
+            text("Searched at").width(Length::FillPortion(2)),
         ];
 
         let search = self.activity_search.to_lowercase();
@@ -554,6 +588,7 @@ impl App {
                         text(&record.file_name).width(Length::FillPortion(3)),
                         text(&record.keyword).width(Length::FillPortion(2)),
                         text(record.match_count.to_string()).width(Length::FillPortion(1)),
+                        text(&record.searched_at).width(Length::FillPortion(2)),
                     ]
                     .spacing(10),
                 );
@@ -573,7 +608,7 @@ impl App {
             controls,
             status,
             scrollable(records).height(Length::Fill),
-            text("Note: Activity is stored in memory and saved to MySQL on each analysis."),
+            text("Activity history is loaded from MySQL and persists after restarting the app."),
         ]
         .spacing(15)
         .into()
