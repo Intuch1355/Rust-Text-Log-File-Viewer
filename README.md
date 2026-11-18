@@ -74,6 +74,8 @@ DATABASE_URL=mysql://root:@127.0.0.1:3306/save_log
 
 > The app runs without MySQL too — it just won't persist activity history.
 
+### For windows need to pull the code from Windows branch
+
 ---
 
 ## 🧪 Testing
