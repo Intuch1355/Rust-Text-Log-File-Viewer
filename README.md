@@ -35,16 +35,10 @@ A desktop utility for analyzing text/log files with a modern GUI. Built in Rust 
 - Rust installed (`cargo --version` ≥ 1.70)
 - A MySQL server running (either locally or via Docker — see below)
 
-### CLI Mode
-```bash
-cargo run -- <file_path> <keyword>
-```
-
-### GUI Mode
+### GUI
 ```bash
 cargo run
 ```
-*Note: GUI entry point is in `src/ui.rs` (currently active)*
 
 ---
 
