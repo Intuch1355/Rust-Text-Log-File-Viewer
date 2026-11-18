@@ -4,9 +4,9 @@
 A desktop utility for analyzing text/log files with a modern GUI. Built in Rust using the Iced framework. Tested and runs on **macOS**, **Linux**, and **Windows 11**. Key features include keyword filtering, file metadata display, activity logging, and MySQL integration.
 
 **Group Members**  
-- Intuch Choojaroenchaikit 69011348
-- Arithat Hanchai 69011302
-- Supachok Suthamlert 69011521
+- Intuch Choojaroenchaikit 69011348 -- GUI
+- Arithat Hanchai 69011302 -- DATABASE
+- Supachok Suthamlert 69011521 -- TEST
 
 ---
 
