@@ -6,7 +6,7 @@ A desktop utility for analyzing text/log files with a modern GUI. Built in Rust 
 **Group Members**  
 - Intuch Choojaroenchaikit 69011348
 - Arithat Hanchai 69011302
--
+- Supachok Suthamlert 69011521
 
 ---
 
