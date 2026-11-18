@@ -86,10 +86,14 @@ DATABASE_URL=mysql://root:@127.0.0.1:3306/save_log
 
 ## 📸 Screenshots
 1. Viewer screen with file content
+<img width="1136" height="912" alt="Screenshot 2026-11-18 at 16 45 26" src="https://github.com/user-attachments/assets/2f0fd362-85f4-450c-b53e-8d7b96014038" />
 
 2. Details screen with metadata
+<img width="1136" height="912" alt="Screenshot 2026-11-18 at 16 45 28" src="https://github.com/user-attachments/assets/a2938fbc-61e2-445b-b8d7-f25d63a32c2b" />
+
 
 3. Activity screen with search history
+<img width="1136" height="912" alt="Screenshot 2026-11-18 at 16 45 32" src="https://github.com/user-attachments/assets/446c35d2-dffa-49a8-ad05-535f22cf26da" />
 
 
 ---
